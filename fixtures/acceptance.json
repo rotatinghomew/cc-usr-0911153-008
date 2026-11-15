@@ -1,0 +1,158 @@
+{
+  "scenario": "东盟医疗人工智能本地化验证注册库",
+  "synthetic": true,
+  "records": [
+    {
+      "record_id": "validation_cohort-001",
+      "payload": {
+        "hospital_code": "hospital_code-0",
+        "population_group": "population_group-1",
+        "condition_code": "condition_code-2",
+        "sample_size": 17.7,
+        "positive_rate": 0.69,
+        "consent_scope": "consent_scope-0",
+        "terminology_version": "terminology_version-1",
+        "missingness": 25.3,
+        "sensitivity": 27.2,
+        "specificity": 29.1,
+        "adverse_events": 31.0,
+        "review_board": "review_board-1"
+      },
+      "state": "proposed",
+      "source": "synthetic-local-acceptance"
+    },
+    {
+      "record_id": "validation_cohort-002",
+      "payload": {
+        "hospital_code": "hospital_code-1",
+        "population_group": "population_group-2",
+        "condition_code": "condition_code-3",
+        "sample_size": 21.4,
+        "positive_rate": 0.8,
+        "consent_scope": "consent_scope-1",
+        "terminology_version": "terminology_version-2",
+        "missingness": 29.0,
+        "sensitivity": 30.9,
+        "specificity": 32.8,
+        "adverse_events": 34.7,
+        "review_board": "review_board-2"
+      },
+      "state": "proposed",
+      "source": "synthetic-local-acceptance"
+    },
+    {
+      "record_id": "validation_cohort-003",
+      "payload": {
+        "hospital_code": "hospital_code-2",
+        "population_group": "population_group-3",
+        "condition_code": "condition_code-4",
+        "sample_size": 25.1,
+        "positive_rate": 0.91,
+        "consent_scope": "consent_scope-2",
+        "terminology_version": "terminology_version-3",
+        "missingness": 32.7,
+        "sensitivity": 34.6,
+        "specificity": 36.5,
+        "adverse_events": 38.4,
+        "review_board": "review_board-3"
+      },
+      "state": "proposed",
+      "source": "synthetic-local-acceptance"
+    },
+    {
+      "record_id": "validation_cohort-004",
+      "payload": {
+        "hospital_code": "hospital_code-3",
+        "population_group": "population_group-4",
+        "condition_code": "condition_code-0",
+        "sample_size": 28.8,
+        "positive_rate": 0.25,
+        "consent_scope": "consent_scope-3",
+        "terminology_version": "terminology_version-4",
+        "missingness": 36.4,
+        "sensitivity": 38.3,
+        "specificity": 40.2,
+        "adverse_events": 42.1,
+        "review_board": "review_board-4"
+      },
+      "state": "proposed",
+      "source": "synthetic-local-acceptance"
+    },
+    {
+      "record_id": "validation_cohort-005",
+      "payload": {
+        "hospital_code": "hospital_code-4",
+        "population_group": "population_group-0",
+        "condition_code": "condition_code-1",
+        "sample_size": 32.5,
+        "positive_rate": 0.36,
+        "consent_scope": "consent_scope-4",
+        "terminology_version": "terminology_version-0",
+        "missingness": 40.1,
+        "sensitivity": 42.0,
+        "specificity": 43.9,
+        "adverse_events": 45.8,
+        "review_board": "review_board-0"
+      },
+      "state": "proposed",
+      "source": "synthetic-local-acceptance"
+    },
+    {
+      "record_id": "validation_cohort-006",
+      "payload": {
+        "hospital_code": "hospital_code-0",
+        "population_group": "population_group-1",
+        "condition_code": "condition_code-2",
+        "sample_size": 36.2,
+        "positive_rate": 0.47,
+        "consent_scope": "consent_scope-0",
+        "terminology_version": "terminology_version-1",
+        "missingness": 43.8,
+        "sensitivity": 45.7,
+        "specificity": 47.6,
+        "adverse_events": 49.5,
+        "review_board": "review_board-1"
+      },
+      "state": "proposed",
+      "source": "synthetic-local-acceptance"
+    },
+    {
+      "record_id": "validation_cohort-007",
+      "payload": {
+        "hospital_code": "hospital_code-1",
+        "population_group": "population_group-2",
+        "condition_code": "condition_code-3",
+        "sample_size": 39.9,
+        "positive_rate": 0.58,
+        "consent_scope": "consent_scope-1",
+        "terminology_version": "terminology_version-2",
+        "missingness": 47.5,
+        "sensitivity": 49.4,
+        "specificity": 51.3,
+        "adverse_events": 53.2,
+        "review_board": "review_board-2"
+      },
+      "state": "proposed",
+      "source": "synthetic-local-acceptance"
+    },
+    {
+      "record_id": "validation_cohort-008",
+      "payload": {
+        "hospital_code": "hospital_code-2",
+        "population_group": "population_group-3",
+        "condition_code": "condition_code-4",
+        "sample_size": 43.6,
+        "positive_rate": 0.69,
+        "consent_scope": "consent_scope-2",
+        "terminology_version": "terminology_version-3",
+        "missingness": 51.2,
+        "sensitivity": 53.1,
+        "specificity": 55.0,
+        "adverse_events": 56.9,
+        "review_board": "review_board-3"
+      },
+      "state": "proposed",
+      "source": "synthetic-local-acceptance"
+    }
+  ]
+}
