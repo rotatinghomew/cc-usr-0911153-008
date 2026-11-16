@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterator, Mapping, Sequence
 
 from clinic_localizer.cohorts.protocol import Decision, DomainRecord, ContractError, canonical_json, stable_hash, utc_now
+from clinic_localizer.governance.use_scope import prepare_scopes, register_scope, link_cohort, issue_scope, restrict_scope, scope_history
 
 
 SCHEMA = """
@@ -83,6 +84,27 @@ class Repository:
     def initialize(self) -> None:
         with self.connect() as connection:
             connection.executescript(SCHEMA)
+            prepare_scopes(connection)
+
+    def register_scope(self, scope_id: str, group: str, purpose: str) -> None:
+        with self.transaction() as connection:
+            register_scope(connection, scope_id, group, purpose)
+
+    def link_cohort(self, scope_id: str, cohort_id: str) -> None:
+        with self.transaction() as connection:
+            link_cohort(connection, scope_id, cohort_id)
+
+    def issue_scope(self, issue_id: str, scope_id: str) -> dict[str, Any]:
+        with self.transaction() as connection:
+            return issue_scope(connection, issue_id, scope_id)
+
+    def restrict_scope(self, restriction_id: str, issue_id: str, reason: str) -> None:
+        with self.transaction() as connection:
+            restrict_scope(connection, restriction_id, issue_id, reason)
+
+    def scope_history(self, scope_id: str) -> dict[str, Any]:
+        with self.connect() as connection:
+            return scope_history(connection, scope_id)
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
