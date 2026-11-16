@@ -7,15 +7,43 @@ from typing import Any, Iterable
 from clinic_localizer.cohorts.protocol import DomainRecord, bounded, finite_number, normalized_text
 
 
+def _optional(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        number = float(finite_number(value))
+    except (ValueError, TypeError, ArithmeticError):
+        return None
+    return number if math.isfinite(number) else None
+
+
 def confusion_counts(record: DomainRecord) -> dict[str, float]:
-    size = max(1.0, finite_number(record.payload.get("sample_size", 1.0)))
-    prevalence = bounded(finite_number(record.payload.get("positive_rate", 0.0)))
-    sensitivity = bounded(finite_number(record.payload.get("sensitivity", 0.0)))
-    specificity = bounded(finite_number(record.payload.get("specificity", 0.0)))
-    positives = size * prevalence
-    negatives = size - positives
+    """Counts over *labelled* records only.
+
+    Unlabelled records (missingness) and absent sensitivity labels are never
+    folded into the negative class or into a zero-sensitivity result.  When a
+    label is absent the returned counts expose no information: callers get an
+    interval spanning [0, 1] instead of a false negative signal.
+    """
+
+    size = _optional(record.payload.get("sample_size"))
+    prevalence = _optional(record.payload.get("positive_rate"))
+    sensitivity = _optional(record.payload.get("sensitivity"))
+    specificity = _optional(record.payload.get("specificity"))
+    missingness = _optional(record.payload.get("missingness"))
+    if size is None or size <= 0 or prevalence is None or sensitivity is None or specificity is None:
+        return {"tp": 0.0, "fn": 0.0, "tn": 0.0, "fp": 0.0, "labelled": 0.0}
+    labelled = size * (1.0 - bounded(missingness if missingness is not None else 0.0))
+    if labelled <= 0:
+        return {"tp": 0.0, "fn": 0.0, "tn": 0.0, "fp": 0.0, "labelled": 0.0}
+    prevalence = bounded(prevalence)
+    sensitivity = bounded(sensitivity)
+    specificity = bounded(specificity)
+    positives = labelled * prevalence
+    negatives = labelled - positives
     return {"tp": positives * sensitivity, "fn": positives * (1.0 - sensitivity),
-            "tn": negatives * specificity, "fp": negatives * (1.0 - specificity)}
+            "tn": negatives * specificity, "fp": negatives * (1.0 - specificity),
+            "labelled": labelled}
 
 
 def wilson_interval(successes: float, total: float, z: float = 1.96) -> tuple[float, float]:
@@ -32,11 +60,14 @@ def cohort_metrics(record: DomainRecord) -> dict[str, float]:
     counts = confusion_counts(record)
     sensitivity_interval = wilson_interval(counts["tp"], counts["tp"] + counts["fn"])
     specificity_interval = wilson_interval(counts["tn"], counts["tn"] + counts["fp"])
-    missing = bounded(finite_number(record.payload.get("missingness", 0.0)))
-    adverse = max(0.0, finite_number(record.payload.get("adverse_events", 0.0)))
+    missing = _optional(record.payload.get("missingness"))
+    adverse = _optional(record.payload.get("adverse_events"))
+    total = sum(counts[key] for key in ("tp", "fn", "tn", "fp"))
+    # Absent safety data widens to the full range instead of implying zero harm.
+    safety = bounded(adverse / max(1.0, total)) if adverse is not None and total > 0 else 1.0
     return {"sensitivity_low": sensitivity_interval[0], "sensitivity_high": sensitivity_interval[1],
             "specificity_low": specificity_interval[0], "specificity_high": specificity_interval[1],
-            "missingness": missing, "safety_signal": bounded(adverse / max(1.0, sum(counts.values())))}
+            "missingness": bounded(missing) if missing is not None else 1.0, "safety_signal": safety}
 
 
 def consent_allows(record: DomainRecord, purpose: str) -> bool:

@@ -7,8 +7,9 @@ from typing import Any, Mapping
 from clinic_localizer.cohorts.protocol import ContractError, Decision, DomainRecord, records_from_fixture, stable_hash
 from clinic_localizer.evidence.registry import Repository
 from clinic_localizer.governance.review_cycle import advance_for_outcome, decide
-from clinic_localizer.submission.evidence_package import export_bundle, verify_bundle
 from clinic_localizer.statistics.cohort_guard import derive_context
+from clinic_localizer.statistics.stratified_reliability import compare_strata
+from clinic_localizer.submission.evidence_package import export_bundle, verify_bundle
 
 
 class Application:
@@ -46,6 +47,7 @@ class Application:
         completed = self.repository.completed_run(run_id)
         if completed is not None:
             return completed
+        purpose = fixture.get("intended_use") or fixture.get("purpose")
         decisions: dict[str, Decision] = {}
         final_records: list[DomainRecord] = []
         for record in records:
@@ -55,15 +57,31 @@ class Application:
         snapshot = self.repository.snapshot()
         if snapshot["chain_errors"]:
             raise ContractError("audit chain verification failed")
-        manifest = export_bundle(output, final_records, decisions, snapshot, self.repository.event_rows())
+        applicability = compare_strata(final_records, purpose=purpose, context=self.context)
+        scope_histories = []
+        with self.repository.connect() as connection:
+            scope_ids = [row[0] for row in connection.execute(
+                "SELECT scope_id FROM use_scopes ORDER BY scope_id")]
+        for scope_id in scope_ids:
+            scope_histories.append(self.repository.scope_history(scope_id))
+        manifest = export_bundle(output, final_records, decisions, snapshot, self.repository.event_rows(),
+                                 purpose=purpose, applicability=applicability,
+                                 scope_histories=scope_histories)
         result = {"run_id": run_id, "fixture_hash": fixture_hash, "records": len(final_records),
-                  "decisions": len(decisions), "manifest": manifest, "snapshot": snapshot}
+                  "decisions": len(decisions), "manifest": manifest, "snapshot": snapshot,
+                  "supported_groups": applicability["supported_groups"],
+                  "deferred_groups": applicability["deferred_groups"],
+                  "blocked_groups": applicability["blocked_groups"],
+                  "all_groups_supported": applicability["all_groups_supported"]}
         self.repository.finish_run(run_id, result)
         return result
 
     def inspect(self) -> dict[str, Any]:
         return {"snapshot": self.repository.snapshot(), "records": [record.__dict__ for record in self.repository.list_records()],
                 "decisions": self.repository.decision_rows()}
+
+    def stratified_review(self, purpose: str | None = None) -> dict[str, Any]:
+        return self.repository.stratified_review(purpose=purpose, context=self.context)
 
     def scope_history(self, scope_id: str) -> dict[str, Any]:
         return self.repository.scope_history(scope_id)

@@ -5,7 +5,8 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from clinic_localizer.cohorts.protocol import Decision, DomainRecord, canonical_json, stable_hash, utc_now
+from clinic_localizer.cohorts.protocol import Decision, DomainRecord, stable_hash, utc_now
+from clinic_localizer.statistics.stratified_reliability import compare_strata
 
 
 def ensure_output(path: str | Path) -> Path:
@@ -47,30 +48,112 @@ def write_rules(path: Path, decisions: Mapping[str, Decision]) -> int:
     return count
 
 
-def build_summary(records: list[DomainRecord], decisions: Mapping[str, Decision], snapshot: Mapping[str, Any]) -> dict[str, Any]:
+def build_summary(records: list[DomainRecord], decisions: Mapping[str, Decision], snapshot: Mapping[str, Any],
+                  applicability: Mapping[str, Any] | None = None) -> dict[str, Any]:
     outcomes: dict[str, int] = {}
     for decision in decisions.values():
         outcomes[decision.outcome] = outcomes.get(decision.outcome, 0) + 1
     scores = [decision.score for decision in decisions.values()]
-    return {"product": '东盟医疗人工智能本地化验证注册库', "entity": 'validation_cohort', "generated_at": utc_now(),
-            "record_count": len(records), "decision_count": len(decisions), "outcomes": outcomes,
-            "average_score": sum(scores) / len(scores) if scores else 0.0,
-            "minimum_score": min(scores) if scores else 0.0, "maximum_score": max(scores) if scores else 0.0,
-            "repository": snapshot}
+    summary = {"product": '东盟医疗人工智能本地化验证注册库', "entity": 'validation_cohort', "generated_at": utc_now(),
+               "record_count": len(records), "decision_count": len(decisions), "outcomes": outcomes,
+               "average_score": sum(scores) / len(scores) if scores else 0.0,
+               "minimum_score": min(scores) if scores else 0.0, "maximum_score": max(scores) if scores else 0.0,
+               "repository": snapshot}
+    if applicability is not None:
+        summary["applicability"] = {
+            "purpose": applicability.get("purpose"),
+            "supported_groups": applicability.get("supported_groups", []),
+            "deferred_groups": applicability.get("deferred_groups", []),
+            "blocked_groups": applicability.get("blocked_groups", []),
+            "no_evidence_groups": applicability.get("no_evidence_groups", []),
+            "all_groups_supported": applicability.get("all_groups_supported", False),
+            "policy": applicability.get("policy"),
+        }
+        summary["approvable_range"] = {
+            group: item["supported_conditions"]
+            for group, item in applicability.get("groups", {}).items()
+        }
+    return summary
+
+
+def write_strata(path: Path, applicability: Mapping[str, Any]) -> int:
+    """Write one row per population group so review never relies on a pooled pass."""
+
+    rows = []
+    for group in sorted(applicability.get("groups", {})):
+        item = applicability["groups"][group]
+        rows.append({
+            "population_group": group,
+            "status": item["status"],
+            "reliable": int(item["status"] == "supported"),
+            "purpose": item.get("purpose") or "",
+            "cohort_count": item["cohort_count"],
+            "supported_conditions": ";".join(item["supported_conditions"]),
+            "limitations": " | ".join(item["limitations"]),
+            "conclusion": item["conclusion"],
+        })
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["population_group", "status", "reliable", "purpose",
+                                                    "cohort_count", "supported_conditions", "limitations", "conclusion"])
+        writer.writeheader()
+        writer.writerows(rows)
+    return len(rows)
+
+
+def write_scope_ranges(path: Path, histories: Iterable[Mapping[str, Any]]) -> int:
+    """Write one row per scope, including why its range is what it is."""
+
+    rows = []
+    for history in histories:
+        scope = history["scope"]
+        issuances = history.get("issuances") or []
+        latest_issue = issuances[-1] if issuances else None
+        reviews = history.get("reviews") or []
+        latest_review = reviews[-1]["review"] if reviews else {}
+        approved = (latest_issue or {}).get("approved_range") or {}
+        restrictions = (latest_issue or {}).get("restrictions") or []
+        rows.append({
+            "scope_id": scope["scope_id"],
+            "population_group": scope["population_group"],
+            "purpose": scope["intended_use"],
+            "decision": approved.get("decision") or latest_review.get("decision") or "unreviewed",
+            "conditions": ";".join(approved.get("conditions") or []),
+            "issued": int(bool(latest_issue)),
+            "issue_id": (latest_issue or {}).get("issue_id", ""),
+            "restriction_count": len(restrictions),
+            "rationale": approved.get("reason") or latest_review.get("conclusion")
+                         or "no applicability review recorded",
+        })
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["scope_id", "population_group", "purpose", "decision",
+                                                    "conditions", "issued", "issue_id", "restriction_count",
+                                                    "rationale"])
+        writer.writeheader()
+        writer.writerows(rows)
+    return len(rows)
 
 
 def export_bundle(output: str | Path, records: list[DomainRecord], decisions: Mapping[str, Decision],
-                  snapshot: Mapping[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
+                  snapshot: Mapping[str, Any], events: list[dict[str, Any]],
+                  purpose: str | None = None,
+                  applicability: Mapping[str, Any] | None = None,
+                  scope_histories: Iterable[Mapping[str, Any]] | None = None) -> dict[str, Any]:
     root = ensure_output(output)
-    summary = build_summary(records, decisions, snapshot)
+    if applicability is None:
+        applicability = compare_strata(records, purpose=purpose)
+    summary = build_summary(records, decisions, snapshot, applicability)
     record_count = write_records(root / "records.csv", records, decisions)
     rule_count = write_rules(root / "rules.csv", decisions)
+    strata_count = write_strata(root / "strata.csv", applicability)
+    scope_count = write_scope_ranges(root / "scope-ranges.csv", scope_histories or [])
     summary_hash = write_json(root / "summary.json", summary)
     decision_hash = write_json(root / "decisions.json", [value.as_dict() for _, value in sorted(decisions.items())])
+    applicability_hash = write_json(root / "applicability.json", applicability)
     event_hash = write_json(root / "audit-events.json", events)
     manifest = {"files": {"summary.json": summary_hash, "decisions.json": decision_hash,
-                           "audit-events.json": event_hash}, "record_rows": record_count,
-                "rule_rows": rule_count, "created_at": utc_now()}
+                           "applicability.json": applicability_hash, "audit-events.json": event_hash},
+                "record_rows": record_count, "rule_rows": rule_count, "strata_rows": strata_count,
+                "scope_range_rows": scope_count, "created_at": utc_now()}
     manifest["manifest_hash"] = stable_hash(manifest)
     write_json(root / "manifest.json", manifest)
     return manifest

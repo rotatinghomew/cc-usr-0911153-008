@@ -19,3 +19,18 @@ class CohortGuardTests(unittest.TestCase):
 
     def test_stratified_gap(self):
         self.assertEqual(stratified_gap([self.record("a", "x"), self.record("b", "y")])["group_count"], 2.0)
+
+    def test_missing_labels_are_not_counted_as_negative(self):
+        complete = self.record("a")
+        missing = DomainRecord("b", dict(complete.payload) | {"missingness": 1.0})
+        self.assertGreater(cohort_metrics(complete)["sensitivity_low"], 0.0)
+        metrics = cohort_metrics(missing)
+        self.assertEqual(metrics["sensitivity_low"], 0.0)
+        self.assertEqual(metrics["sensitivity_high"], 1.0)
+
+    def test_absent_sensitivity_is_not_treated_as_zero(self):
+        record = self.record("a")
+        without = DomainRecord("b", {key: value for key, value in record.payload.items()
+                                     if key != "sensitivity"})
+        self.assertEqual(cohort_metrics(without)["sensitivity_low"], 0.0)
+        self.assertEqual(cohort_metrics(without)["sensitivity_high"], 1.0)

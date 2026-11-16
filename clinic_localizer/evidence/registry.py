@@ -5,10 +5,22 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator, Mapping, Sequence
+from typing import Any, Iterable, Iterator, Mapping, Sequence
 
 from clinic_localizer.cohorts.protocol import Decision, DomainRecord, ContractError, canonical_json, stable_hash, utc_now
-from clinic_localizer.governance.use_scope import prepare_scopes, register_scope, link_cohort, issue_scope, restrict_scope, scope_history
+from clinic_localizer.governance.use_scope import (
+    issue_scope,
+    issue_scope_checked,
+    link_cohort,
+    prepare_scopes,
+    record_scope_review,
+    recheck_all_scopes,
+    recheck_scope,
+    register_scope,
+    restrict_scope,
+    scope_history,
+)
+from clinic_localizer.statistics.stratified_reliability import compare_strata
 
 
 SCHEMA = """
@@ -98,9 +110,36 @@ class Repository:
         with self.transaction() as connection:
             return issue_scope(connection, issue_id, scope_id)
 
+    def issue_scope_checked(self, issue_id: str, scope_id: str, review_id: str,
+                            context: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        with self.transaction() as connection:
+            return issue_scope_checked(connection, issue_id, scope_id, review_id, context)
+
+    def review_scope(self, review_id: str, scope_id: str, trigger: str = "manual",
+                     context: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        with self.transaction() as connection:
+            return record_scope_review(connection, review_id, scope_id, trigger, context)
+
+    def recheck_scope(self, reevaluation_id: str, scope_id: str, issue_id: str | None,
+                      review_id: str, trigger: str,
+                      context: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        with self.transaction() as connection:
+            return recheck_scope(connection, reevaluation_id, scope_id, issue_id, review_id, trigger, context)
+
+    def recheck_all_scopes(self, trigger: str, review_prefix: str,
+                           changed_cohort_ids: Iterable[str] | None = None,
+                           context: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        with self.transaction() as connection:
+            return recheck_all_scopes(connection, trigger, review_prefix,
+                                      changed_cohort_ids=changed_cohort_ids, context=context)
+
     def restrict_scope(self, restriction_id: str, issue_id: str, reason: str) -> None:
         with self.transaction() as connection:
             restrict_scope(connection, restriction_id, issue_id, reason)
+
+    def stratified_review(self, purpose: str | None = None,
+                          context: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        return compare_strata(self.list_records(), purpose=purpose, context=context)
 
     def scope_history(self, scope_id: str) -> dict[str, Any]:
         with self.connect() as connection:

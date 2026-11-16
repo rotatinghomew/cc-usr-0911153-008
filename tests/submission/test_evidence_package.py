@@ -163,8 +163,10 @@ class EndToEndTests(unittest.TestCase):
     def test_manifest_lists_all_json_artifacts(self):
         run(FIXTURE, self.database, self.output)
         manifest = json.loads((self.output / "manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual(set(manifest["files"]), {"summary.json", "decisions.json", "audit-events.json"})
+        self.assertEqual(set(manifest["files"]), {"summary.json", "decisions.json",
+                                                  "applicability.json", "audit-events.json"})
         self.assertGreater(manifest["rule_rows"], 500)
+        self.assertGreater(manifest["strata_rows"], 0)
 
     def test_records_csv_has_one_row_per_record(self):
         run(FIXTURE, self.database, self.output)
